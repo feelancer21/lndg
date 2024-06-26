@@ -290,6 +290,7 @@ def update_channels(stub):
                 local_policy = chan_data.node1_policy
                 remote_policy = chan_data.node2_policy
             old_fee_rate = db_channel.local_fee_rate if db_channel.local_fee_rate is not None else 0
+            old_inbound_fee_rate = db_channel.local_inbound_fee_rate if db_channel.local_inbound_fee_rate is not None else 0
             db_channel.local_base_fee = local_policy.fee_base_msat
             db_channel.local_fee_rate = local_policy.fee_rate_milli_msat
             db_channel.local_cltv = local_policy.time_lock_delta
@@ -381,6 +382,7 @@ def update_channels(stub):
                 continue
             else:
                 old_fee_rate = None
+                old_inbound_fee_rate = None
                 db_channel.local_base_fee = -1 if db_channel.local_base_fee is None else db_channel.local_base_fee
                 db_channel.local_fee_rate = -1 if db_channel.local_fee_rate is None else db_channel.local_fee_rate
                 db_channel.local_cltv = -1 if db_channel.local_cltv is None else db_channel.local_cltv
@@ -430,6 +432,16 @@ def update_channels(stub):
             #External Fee change detected, update auto fee log
             db_channel.fees_updated = datetime.now()
             Autofees(chan_id=db_channel.chan_id, peer_alias=db_channel.alias, setting=(f"Ext"), old_value=old_fee_rate, new_value=db_channel.local_fee_rate).save()
+        try:
+            if float(version[:4]) >= 0.18:
+                if old_inbound_fee_rate is not None and old_inbound_fee_rate != local_policy.inbound_fee_rate_milli_msat:
+                    print(f"{datetime.now().strftime('%c')} : [Data] : Ext inbound fee change detected on {db_channel.chan_id} for peer {db_channel.alias}: fee updated from {old_inbound_fee_rate} to {db_channel.local_inbound_fee_rate}")
+                    #External Fee change detected, update auto fee log
+                    db_channel.fees_updated = datetime.now()
+                    Autofees(chan_id=db_channel.chan_id, peer_alias=db_channel.alias, setting=(f"ExtIn"), old_value=old_inbound_fee_rate, new_value=db_channel.local_inbound_fee_rate).save()
+        except Exception as e:
+            pass
+            
         db_channel.save()
         counter += 1
         chan_list.append(channel.chan_id)
